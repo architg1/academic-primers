@@ -1,7 +1,11 @@
 """
 Fetch and extract full text from open-access PDFs.
 
-For each open-access paper with a pdf_url:
+PDF discovery (in order):
+  1. Unpaywall  — queries by DOI for any legal OA version (repository, author page, PMC…)
+  2. Semantic Scholar openAccessPdf — already stored on Paper.pdf_url at search time
+
+For each paper with a resolved pdf_url:
   1. Download the PDF
   2. Extract text with pypdf
 
@@ -13,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import os
 from typing import Optional
 
 import httpx
@@ -21,6 +26,7 @@ from pypdf import PdfReader
 from backend.models import Paper
 
 FETCH_TIMEOUT = httpx.Timeout(30.0)
+UNPAYWALL_URL = "https://api.unpaywall.org/v2"
 
 # Cap per paper to keep total LLM context manageable (~3,750 tokens each)
 MAX_CHARS_PER_PAPER = 15_000
@@ -65,11 +71,59 @@ async def _download_and_extract(url: str, client: httpx.AsyncClient) -> Optional
         return None
 
 
+async def _unpaywall_pdf_url(doi: str, email: str, client: httpx.AsyncClient) -> Optional[str]:
+    """Return the best open-access PDF URL for a DOI via Unpaywall, or None."""
+    try:
+        resp = await client.get(
+            f"{UNPAYWALL_URL}/{doi}",
+            params={"email": email},
+            timeout=FETCH_TIMEOUT,
+        )
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        data = resp.json()
+        # Prefer best_oa_location, fall back to any location with a pdf url
+        for loc in [data.get("best_oa_location")] + (data.get("oa_locations") or []):
+            if loc and loc.get("url_for_pdf"):
+                return loc["url_for_pdf"]
+        return None
+    except Exception as exc:
+        print(f"[unpaywall] doi={doi!r} error: {exc}")
+        return None
+
+
+async def _enrich_pdf_urls_via_unpaywall(papers: list[Paper], email: str) -> None:
+    """
+    For papers without a pdf_url, query Unpaywall by DOI to find a legal OA version.
+    Mutates pdf_url and is_open_access on papers where a URL is found.
+    """
+    candidates = [p for p in papers if not p.pdf_url and p.doi]
+    if not candidates:
+        return
+
+    async with httpx.AsyncClient() as client:
+        results = await asyncio.gather(
+            *[_unpaywall_pdf_url(p.doi, email, client) for p in candidates],
+            return_exceptions=True,
+        )
+
+    found = 0
+    for paper, url in zip(candidates, results):
+        if isinstance(url, str) and url:
+            paper.pdf_url = url
+            paper.is_open_access = True
+            found += 1
+
+    if found:
+        print(f"[unpaywall] found PDF URLs for {found}/{len(candidates)} papers")
+
+
 async def enrich_papers_with_pdfs(
     papers: list[Paper],
 ) -> tuple[list[Paper], list[Paper]]:
     """
-    Attempt to fetch full text for every open-access paper that has a pdf_url.
+    Resolve PDF URLs via Unpaywall, then download and extract text.
 
     Returns:
         enriched  — papers to use in the primer:
@@ -77,6 +131,10 @@ async def enrich_papers_with_pdfs(
                       · non-OA papers → included as-is (abstract used by generator)
         failed    — OA papers whose PDF could not be fetched; show as further reading
     """
+    email = os.environ.get("UNPAYWALL_EMAIL", "")
+    if email:
+        await _enrich_pdf_urls_via_unpaywall(papers, email)
+
     oa = [(i, p) for i, p in enumerate(papers) if p.is_open_access and p.pdf_url]
     non_oa_indices = set(range(len(papers))) - {i for i, _ in oa}
 

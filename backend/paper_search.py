@@ -279,15 +279,40 @@ async def _doi_lookup(doi: str, client: httpx.AsyncClient) -> list[Paper]:
         return []
 
 
+async def _run_ss_lookup(query: str, client: httpx.AsyncClient, max_retries: int = 3) -> list[Paper]:
+    params = {"query": query, "fields": SS_FIELDS, "limit": 10}
+    for attempt in range(max_retries):
+        try:
+            resp = await client.get(SS_SEARCH_URL, params=params, headers=_ss_headers(), timeout=TIMEOUT)
+            resp.raise_for_status()
+            papers = []
+            for item in resp.json().get("data", []):
+                p = _ss_data_to_paper(item)
+                if p:
+                    papers.append(p)
+            return papers
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 429 and attempt < max_retries - 1:
+                await asyncio.sleep(2 ** (attempt + 1))
+            else:
+                raise
+    return []
+
+
 async def _title_lookup(query: str, client: httpx.AsyncClient) -> list[Paper]:
-    params = {"query": query, "fields": SS_FIELDS, "limit": 5}
-    try:
-        resp = await client.get(SS_SEARCH_URL, params=params, headers=_ss_headers(), timeout=TIMEOUT)
-        resp.raise_for_status()
-        return [p for item in resp.json().get("data", []) if (p := _ss_data_to_paper(item))]
-    except Exception as exc:
-        print(f"[lookup] query={query!r} error: {exc}")
-        return []
+    # Try the full query first
+    results = await _run_ss_lookup(query, client)
+
+    # SS search is keyword-based — long titles or natural language phrases often
+    # return nothing. If the full query failed, retry with just the first 5 words.
+    if not results:
+        words = query.split()
+        if len(words) > 5:
+            short_query = " ".join(words[:5])
+            print(f"[lookup] no results for full query, retrying with '{short_query}'")
+            results = await _run_ss_lookup(short_query, client)
+
+    return results
 
 
 async def lookup_papers(query: str) -> list[Paper]:

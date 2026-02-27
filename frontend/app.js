@@ -278,8 +278,17 @@ async function findPapers(topic) {
     papersSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   } catch (err) {
-    errorText.textContent = err.message;
-    show(errorBox);
+    // Replace skeletons with an inline error where the user is already looking
+    papersGrid.innerHTML = `
+      <div class="papers-error">
+        <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v4.5a.75.75 0 001.5 0v-4.5zm-.75 7a.75.75 0 100-1.5.75.75 0 000 1.5z" clip-rule="evenodd"/>
+        </svg>
+        <p class="papers-error-heading">No papers found</p>
+        <p class="papers-error-msg">${escapeHtml(err.message)}</p>
+      </div>`;
+    hide(generateConfirm);
+    hide(paperLookup);
     hide(statusSection);
   } finally {
     setSearchLoading(false);

@@ -570,6 +570,40 @@ textarea::placeholder { color: var(--text-secondary); }
 }
 
 /* ─────────────────────────────────────────────────────────────────
+   Papers error state
+───────────────────────────────────────────────────────────────── */
+.papers-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 2.5rem 1rem;
+  text-align: center;
+  background: var(--red-light);
+  border: 1px solid #fecaca;
+  border-radius: var(--radius);
+}
+
+.papers-error svg {
+  width: 32px;
+  height: 32px;
+  color: var(--red);
+  flex-shrink: 0;
+}
+
+.papers-error-heading {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--red);
+}
+
+.papers-error-msg {
+  font-size: 0.85rem;
+  color: var(--red);
+  opacity: 0.85;
+}
+
+/* ─────────────────────────────────────────────────────────────────
    Paper lookup
 ───────────────────────────────────────────────────────────────── */
 .paper-lookup {

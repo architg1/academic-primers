@@ -85,16 +85,12 @@ async def _run_pipeline(topic: str, selected_papers: list | None = None):
             yield _sse("error", {"message": "Found papers but none had usable abstracts. Try a different topic."})
             return
 
-    # Fetch full text for open-access papers
-    oa_count = sum(1 for p in top_papers if p.is_open_access and p.pdf_url)
-    if oa_count:
-        yield _sse("status", {"message": f"Fetching full text for {oa_count} open-access papers…"})
-        try:
-            enriched_papers, failed_papers = await enrich_papers_with_pdfs(top_papers)
-        except Exception as exc:
-            print(f"[pipeline] PDF enrichment error: {exc}")
-            enriched_papers, failed_papers = top_papers, []
-    else:
+    # Resolve and fetch full text — Unpaywall runs first to find PDFs for any paper with a DOI
+    yield _sse("status", {"message": "Looking up open-access full text…"})
+    try:
+        enriched_papers, failed_papers = await enrich_papers_with_pdfs(top_papers)
+    except Exception as exc:
+        print(f"[pipeline] PDF enrichment error: {exc}")
         enriched_papers, failed_papers = top_papers, []
 
     # Send all papers to the frontend (exclude full text — too large for SSE)
