@@ -1,6 +1,6 @@
 # Academic Primer Generator
 
-> **This entire repository was built by [Claude](https://claude.ai) (Anthropic's AI assistant).**
+> **This entire repository was built by [Claude](https://claude.ai).**
 
 A web app that generates PhD-level academic primers from real research literature. Give it a topic, and it searches academic databases, ranks the most impactful papers, and writes a structured 2000–2500 word primer with inline citations — all streamed live to your browser.
 
