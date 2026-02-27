@@ -1,34 +1,44 @@
 /* ─────────────────────────────────────────────────────────────────
-   Academic Primer Generator — frontend logic
+   Academic Primer Generator — two-stage frontend
+
+   Stage 1: "Find Papers"  → POST /api/papers  → show papers + checkboxes
+   Stage 2: "Generate Primer" → POST /api/generate (with selected papers) → SSE stream
 ───────────────────────────────────────────────────────────────── */
 
 const $ = id => document.getElementById(id);
 
 // ── State ────────────────────────────────────────────────────────
-let primerBuffer = '';
-let isGenerating = false;
+let currentPapers  = [];   // papers returned from /api/papers
+let currentTopic   = '';
+let primerBuffer   = '';
+let isSearching    = false;
+let isGenerating   = false;
 
 // ── Elements ─────────────────────────────────────────────────────
-const form          = $('primer-form');
-const topicInput    = $('topic-input');
-const charCount     = $('char-count');
-const submitBtn     = $('submit-btn');
-const btnSpinner    = $('btn-spinner');
-const btnArrow      = submitBtn.querySelector('.btn-arrow');
-const statusSection = $('status-section');
-const statusText    = $('status-text');
-const queriesSection= $('queries-section');
-const queriesList   = $('queries-list');
-const fieldBadge    = $('field-badge');
-const keywordsText  = $('keywords-text');
-const papersSection = $('papers-section');
-const paperCount    = $('paper-count');
-const papersGrid    = $('papers-grid');
-const primerSection = $('primer-section');
-const primerContent = $('primer-content');
-const copyBtn       = $('copy-btn');
-const errorBox      = $('error-box');
-const errorText     = $('error-text');
+const form             = $('primer-form');
+const topicInput       = $('topic-input');
+const charCount        = $('char-count');
+const submitBtn        = $('submit-btn');
+const btnSpinner       = $('btn-spinner');
+const btnArrow         = submitBtn.querySelector('.btn-arrow');
+const statusSection    = $('status-section');
+const statusText       = $('status-text');
+const queriesSection   = $('queries-section');
+const queriesList      = $('queries-list');
+const fieldBadge       = $('field-badge');
+const keywordsText     = $('keywords-text');
+const papersSection    = $('papers-section');
+const paperCount       = $('paper-count');
+const papersGrid       = $('papers-grid');
+const generateConfirm  = $('generate-confirm');
+const selectedCount    = $('selected-count');
+const generateBtn      = $('generate-btn');
+const generateSpinner  = $('generate-spinner');
+const primerSection    = $('primer-section');
+const primerContent    = $('primer-content');
+const copyBtn          = $('copy-btn');
+const errorBox         = $('error-box');
+const errorText        = $('error-text');
 
 // ── Marked config ────────────────────────────────────────────────
 marked.setOptions({ breaks: true });
@@ -70,23 +80,17 @@ copyBtn.addEventListener('click', () => {
   });
 });
 
-// ── Form submit ──────────────────────────────────────────────────
-form.addEventListener('submit', async e => {
-  e.preventDefault();
-  const topic = topicInput.value.trim();
-  if (!topic || isGenerating) return;
-  await run(topic);
-});
-
-// ── Reset UI ─────────────────────────────────────────────────────
+// ── Reset ────────────────────────────────────────────────────────
 function reset() {
-  primerBuffer = '';
+  currentPapers = [];
+  primerBuffer  = '';
   hide(statusSection);
   hide(queriesSection);
   hide(papersSection);
   hide(primerSection);
   hide(errorBox);
   hide(copyBtn);
+  hide(generateConfirm);
   queriesList.innerHTML   = '';
   papersGrid.innerHTML    = '';
   primerContent.innerHTML = '';
@@ -94,65 +98,42 @@ function reset() {
   fieldBadge.textContent   = '';
   keywordsText.textContent = '';
   paperCount.textContent   = '';
+  selectedCount.textContent = '';
 }
 
-// ── Loading state ────────────────────────────────────────────────
-function setLoading(loading) {
-  isGenerating = loading;
-  submitBtn.disabled = loading;
-  btnArrow.style.display = loading ? 'none' : '';
-  loading ? show(btnSpinner) : hide(btnSpinner);
+// ── Loading states ───────────────────────────────────────────────
+function setSearchLoading(on) {
+  isSearching = on;
+  submitBtn.disabled = on;
+  btnArrow.style.display = on ? 'none' : '';
+  on ? show(btnSpinner) : hide(btnSpinner);
 }
 
-// ── SSE event dispatcher ─────────────────────────────────────────
-function handleEvent(data) {
-  switch (data.type) {
+function setGenerateLoading(on) {
+  isGenerating = on;
+  generateBtn.disabled = on;
+  const arrow = generateBtn.querySelector('.btn-arrow');
+  arrow.style.display = on ? 'none' : '';
+  on ? show(generateSpinner) : hide(generateSpinner);
+}
 
-    case 'status':
-      show(statusSection);
-      statusText.textContent = data.message;
-      break;
+// ── Selection helpers ────────────────────────────────────────────
+function getCheckedIndices() {
+  return Array.from(document.querySelectorAll('.paper-checkbox:checked'))
+    .map(cb => parseInt(cb.dataset.index));
+}
 
-    case 'queries':
-      queriesList.innerHTML = (data.queries || [])
-        .map(q => `<li>${escapeHtml(q)}</li>`)
-        .join('');
-      fieldBadge.textContent = data.field || '';
-      keywordsText.textContent = data.keywords?.length
-        ? 'Keywords: ' + data.keywords.join(', ')
-        : '';
-      show(queriesSection);
-      break;
+function updateSelectedCount() {
+  const n = getCheckedIndices().length;
+  selectedCount.textContent = `${n} of ${currentPapers.length} papers selected`;
+}
 
-    case 'papers':
-      paperCount.textContent = `(${data.papers.length})`;
-      papersGrid.innerHTML = data.papers
-        .map((paper, i) => renderPaperCard(paper, i))
-        .join('');
-      show(papersSection);
-      break;
-
-    case 'primer_chunk':
-      show(primerSection);
-      primerContent.classList.add('streaming');
-      primerBuffer += data.content;
-      primerContent.textContent = primerBuffer;
-      break;
-
-    case 'done':
-      primerContent.classList.remove('streaming');
-      primerContent.innerHTML = marked.parse(primerBuffer);
-      show(copyBtn);
-      hide(statusSection);
-      primerSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      break;
-
-    case 'error':
-      errorText.textContent = data.message;
-      show(errorBox);
-      hide(statusSection);
-      break;
-  }
+// ── Checkbox change ──────────────────────────────────────────────
+function onCheckboxChange(e) {
+  const idx = parseInt(e.target.dataset.index);
+  const card = document.querySelector(`.paper-card[data-index="${idx}"]`);
+  if (card) card.classList.toggle('excluded', !e.target.checked);
+  updateSelectedCount();
 }
 
 // ── Paper card renderer ──────────────────────────────────────────
@@ -189,7 +170,10 @@ function renderPaperCard(paper, index) {
   ].filter(Boolean).join('');
 
   return `
-    <div class="paper-card">
+    <div class="paper-card" data-index="${index}">
+      <div class="paper-check">
+        <input type="checkbox" class="paper-checkbox" data-index="${index}" checked />
+      </div>
       <div class="paper-rank">${index + 1}</div>
       <div class="paper-body">
         <div class="paper-title">${titleHtml}</div>
@@ -201,25 +185,116 @@ function renderPaperCard(paper, index) {
     </div>`;
 }
 
-// ── Main run ─────────────────────────────────────────────────────
-async function run(topic) {
+// ── Stage 1: Find papers ─────────────────────────────────────────
+form.addEventListener('submit', async e => {
+  e.preventDefault();
+  const topic = topicInput.value.trim();
+  if (!topic || isSearching || isGenerating) return;
+  await findPapers(topic);
+});
+
+async function findPapers(topic) {
+  currentTopic = topic;
   reset();
-  setLoading(true);
+  setSearchLoading(true);
+
+  show(statusSection);
+  statusText.textContent = 'Searching for papers…';
 
   try {
-    const response = await fetch('/api/generate', {
+    const resp = await fetch('/api/papers', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ topic }),
     });
 
-    if (!response.ok) {
-      let msg = `Server error (${response.status})`;
-      try { msg = (await response.json()).detail || msg; } catch { /* ignore */ }
+    if (!resp.ok) {
+      let msg = `Server error (${resp.status})`;
+      try { msg = (await resp.json()).detail || msg; } catch { /* ignore */ }
       throw new Error(msg);
     }
 
-    const reader  = response.body.getReader();
+    const data = await resp.json();
+    currentPapers = data.papers;
+
+    // Show queries card
+    if (data.queries?.length) {
+      queriesList.innerHTML = data.queries.map(q => `<li>${escapeHtml(q)}</li>`).join('');
+      fieldBadge.textContent = data.field || '';
+      keywordsText.textContent = data.keywords?.length ? 'Keywords: ' + data.keywords.join(', ') : '';
+      show(queriesSection);
+    }
+
+    // Show papers with checkboxes
+    paperCount.textContent = `(${currentPapers.length})`;
+    papersGrid.innerHTML = currentPapers.map((p, i) => renderPaperCard(p, i)).join('');
+
+    // Attach checkbox listeners
+    document.querySelectorAll('.paper-checkbox').forEach(cb => {
+      cb.addEventListener('change', onCheckboxChange);
+    });
+
+    updateSelectedCount();
+    show(papersSection);
+    show(generateConfirm);
+    hide(statusSection);
+
+    // Scroll to papers
+    papersSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  } catch (err) {
+    errorText.textContent = err.message;
+    show(errorBox);
+    hide(statusSection);
+  } finally {
+    setSearchLoading(false);
+  }
+}
+
+// ── Stage 2: Generate primer ─────────────────────────────────────
+generateBtn.addEventListener('click', async () => {
+  if (isGenerating) return;
+
+  const indices = getCheckedIndices();
+  if (indices.length === 0) {
+    errorText.textContent = 'Please select at least one paper.';
+    show(errorBox);
+    return;
+  }
+
+  hide(errorBox);
+  const selectedPapers = indices.map(i => currentPapers[i]);
+  await streamPrimer(currentTopic, selectedPapers);
+});
+
+async function streamPrimer(topic, papers) {
+  // Reset only the primer/status sections, leave papers visible
+  primerBuffer = '';
+  hide(primerSection);
+  hide(copyBtn);
+  hide(errorBox);
+  primerContent.innerHTML = '';
+  primerContent.classList.remove('streaming');
+
+  setGenerateLoading(true);
+
+  show(statusSection);
+  statusText.textContent = `Preparing primer from ${papers.length} papers…`;
+
+  try {
+    const resp = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic, selected_papers: papers }),
+    });
+
+    if (!resp.ok) {
+      let msg = `Server error (${resp.status})`;
+      try { msg = (await resp.json()).detail || msg; } catch { /* ignore */ }
+      throw new Error(msg);
+    }
+
+    const reader  = resp.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
 
@@ -229,16 +304,13 @@ async function run(topic) {
 
       buffer += decoder.decode(value, { stream: true });
       const frames = buffer.split('\n\n');
-      buffer = frames.pop(); // hold incomplete tail
+      buffer = frames.pop();
 
       for (const frame of frames) {
         const line = frame.trim();
         if (!line.startsWith('data: ')) continue;
-        try {
-          handleEvent(JSON.parse(line.slice(6)));
-        } catch (e) {
-          console.warn('Failed to parse SSE frame:', line, e);
-        }
+        try { handleEvent(JSON.parse(line.slice(6))); }
+        catch (e) { console.warn('SSE parse error:', e); }
       }
     }
   } catch (err) {
@@ -246,6 +318,38 @@ async function run(topic) {
     show(errorBox);
     hide(statusSection);
   } finally {
-    setLoading(false);
+    setGenerateLoading(false);
+  }
+}
+
+// ── SSE event dispatcher ─────────────────────────────────────────
+function handleEvent(data) {
+  switch (data.type) {
+
+    case 'status':
+      show(statusSection);
+      statusText.textContent = data.message;
+      break;
+
+    case 'primer_chunk':
+      show(primerSection);
+      primerContent.classList.add('streaming');
+      primerBuffer += data.content;
+      primerContent.textContent = primerBuffer;
+      break;
+
+    case 'done':
+      primerContent.classList.remove('streaming');
+      primerContent.innerHTML = marked.parse(primerBuffer);
+      show(copyBtn);
+      hide(statusSection);
+      primerSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      break;
+
+    case 'error':
+      errorText.textContent = data.message;
+      show(errorBox);
+      hide(statusSection);
+      break;
   }
 }

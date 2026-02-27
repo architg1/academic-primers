@@ -288,6 +288,19 @@ textarea::placeholder { color: var(--text-secondary); }
 /* ─────────────────────────────────────────────────────────────────
    Papers grid
 ───────────────────────────────────────────────────────────────── */
+.papers-header {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.25rem;
+}
+
+.papers-hint {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
 #papers-grid {
   display: flex;
   flex-direction: column;
@@ -303,10 +316,68 @@ textarea::placeholder { color: var(--text-secondary); }
   border-radius: var(--radius);
   padding: 1rem 1.25rem;
   box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.15s;
+  transition: box-shadow 0.15s, opacity 0.2s;
 }
 
 .paper-card:hover { box-shadow: var(--shadow); }
+
+.paper-card.excluded {
+  opacity: 0.45;
+}
+
+/* Checkbox column */
+.paper-check {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  padding-top: 2px;
+}
+
+.paper-check input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Generate confirm bar */
+.generate-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.25rem;
+  padding: 1rem 1.25rem;
+  background: var(--accent-light);
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius);
+}
+
+.selected-count {
+  font-size: 0.88rem;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.generate-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.generate-btn:hover:not(:disabled) { background: var(--accent-hover); }
+.generate-btn:disabled { opacity: 0.65; cursor: not-allowed; }
 
 .paper-rank {
   flex-shrink: 0;

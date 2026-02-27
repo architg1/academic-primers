@@ -33,7 +33,7 @@
         <div class="form-footer">
           <span id="char-count" class="char-count">0 / 500</span>
           <button type="submit" id="submit-btn">
-            <span class="btn-label">Generate Primer</span>
+            <span class="btn-label">Find Papers</span>
             <svg class="btn-arrow" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/>
             </svg>
@@ -63,11 +63,26 @@
 
     <!-- ── Papers ── -->
     <section id="papers-section" class="hidden">
-      <h2 class="section-title">
-        Papers Found
-        <span class="section-count" id="paper-count"></span>
-      </h2>
+      <div class="papers-header">
+        <h2 class="section-title">
+          Papers Found
+          <span class="section-count" id="paper-count"></span>
+        </h2>
+        <span class="papers-hint">Uncheck papers to exclude them from the primer.</span>
+      </div>
       <div id="papers-grid"></div>
+
+      <!-- Confirm step -->
+      <div id="generate-confirm" class="generate-confirm hidden">
+        <span id="selected-count" class="selected-count"></span>
+        <button id="generate-btn" type="button" class="generate-btn">
+          Generate Primer
+          <svg class="btn-arrow" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/>
+          </svg>
+          <span class="spinner hidden" id="generate-spinner"></span>
+        </button>
+      </div>
     </section>
 
     <!-- ── Primer ── -->

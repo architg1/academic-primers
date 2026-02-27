@@ -66,47 +66,44 @@ _SYSTEM_PROMPT = """\
 You are a scientific writer producing academic primers for PhD-level researchers. \
 Your primers are rigorous, precise, and assume graduate-level mathematical and scientific literacy. \
 Do not over-explain basics. Use field-standard notation and terminology. \
-Cite papers using bracketed numbers like [1], [2], [3] inline throughout the text.\
+Cite papers using bracketed numbers like [1], [2], [3] inline throughout the text. \
+Be concise — every sentence should add information.\
 """
 
 _PRIMER_TEMPLATE = """\
-Write a comprehensive academic primer on the following topic for a PhD-level student:
+Write an academic primer on the following topic for a PhD-level student.
+Target length: 2000-2500 words total across all sections.
 
 **Topic:** {topic}
 
-**Available papers (cite these inline using [n] notation):**
+**Available papers (cite inline using [n] notation):**
 
 {context}
 
 ---
 
-Structure your primer with these sections:
+Use exactly these four sections with the headings shown:
 
-## 1. Overview
-A concise framing of the topic — what it is, why it matters, and where it sits in the broader field.
+## Background
+Approximately 500 words. Establish the scientific context: why this topic matters, \
+what problem it addresses, and how it fits within the broader field. \
+Cover the key historical developments and the conceptual arc that led to the current state of research. \
+Cite liberally.
 
-## 2. Core Concepts and Formalism
-The essential definitions, mathematical formulations, and theoretical foundations. \
-Be precise; do not simplify away important nuance.
+## Results
+Approximately 1000 words. Summarize the principal empirical and theoretical findings reported across the papers. \
+What has been demonstrated, measured, or proven? Group related findings. \
+Be specific: report effect sizes, model names, experimental conditions, or key equations where relevant. \
+Cite each finding to its source.
 
-## 3. Historical Development
-Key milestones and how the field evolved to its current state. Focus on conceptual shifts, not just dates.
-
-## 4. Current Methodology and State of the Art
-The dominant approaches, architectures, or experimental paradigms in active use today. \
-What works, what the trade-offs are, and why the community converged on these methods.
-
-## 5. Open Problems and Active Research Directions
-Unsolved questions, current debates, and where the field is heading. \
-This should help a new PhD student identify where they could contribute.
-
-## 6. Key Papers to Read
-A short annotated reading list drawn from the provided papers, ordered by priority. \
-For each, one sentence on what it contributes and why it should be read.
-
----
+## Discussion
+Approximately 500 words. Interpret the results in aggregate. What do they collectively reveal? \
+Where do findings converge or conflict? What are the open questions and active debates? \
+What should a new researcher in this area focus on first?
 {further_reading}
-Be specific and grounded in the literature. Cite papers throughout, not just in section 6.\
+---
+
+Cite papers throughout all sections. Do not add any sections beyond the four above.\
 """
 
 
@@ -133,7 +130,7 @@ async def stream_primer(
 
     stream = await client.chat.completions.create(
         model="llama-3.3-70b-versatile",
-        max_tokens=4096,
+        max_tokens=3000,
         stream=True,
         messages=[
             {"role": "system", "content": _SYSTEM_PROMPT},

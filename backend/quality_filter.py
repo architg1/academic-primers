@@ -4,9 +4,10 @@ Quality filtering and ranking for discovered papers.
 Scoring factors (higher = better):
   - Citation impact (log-scaled so old classics don't dominate)
   - Influential citation count (Semantic Scholar's measure of real impact)
-  - Recency (bonus for papers from last 5-10 years)
+  - Recency (bonus for papers from last 5-10 years, gated on ≥2 citations)
+  - Peer-reviewed venue (bonus); known preprint servers (small penalty)
   - Open access (small bonus — we can fetch full text)
-  - Has abstract (required for primer generation)
+  - Abstract length (graduated — longer abstracts indicate more substantial papers)
 
 Deduplication:
   - By DOI (exact match)
@@ -17,6 +18,8 @@ import math
 import re
 
 from backend.models import Paper
+
+_PREPRINT_VENUES = {"arxiv", "biorxiv", "medrxiv", "ssrn", "chemrxiv", "techrxiv"}
 
 
 def _normalize_title(title: str) -> str:
@@ -35,8 +38,9 @@ def score_paper(paper: Paper) -> float:
     if paper.influential_citation_count > 0:
         score += math.log1p(paper.influential_citation_count) * 10
 
-    # Recency bonus — recent work is more likely to reflect current understanding
-    if paper.year:
+    # Recency bonus — gated on ≥2 citations so zero-citation preprints don't get
+    # an unearned boost over validated older work
+    if paper.year and paper.citation_count >= 2:
         if paper.year >= 2020:
             score += 12
         elif paper.year >= 2015:
@@ -44,13 +48,27 @@ def score_paper(paper: Paper) -> float:
         elif paper.year >= 2010:
             score += 3
 
+    # Venue quality — peer-reviewed venues get a bonus; preprint servers get a penalty
+    if paper.venue:
+        venue_lower = paper.venue.lower()
+        if any(p in venue_lower for p in _PREPRINT_VENUES):
+            score -= 3
+        else:
+            score += 5
+
     # Open access — we can attach the PDF to the primer context
     if paper.is_open_access:
         score += 4
 
-    # Has abstract — essential for primer generation; skip papers without one
-    if paper.abstract and len(paper.abstract) > 50:
-        score += 8
+    # Abstract quality — graduated score; longer abstracts indicate more substantial papers
+    if paper.abstract:
+        length = len(paper.abstract)
+        if length > 1000:
+            score += 10
+        elif length > 300:
+            score += 7
+        elif length > 50:
+            score += 3
 
     return score
 

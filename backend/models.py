@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pydantic import BaseModel
 from typing import Optional
 
@@ -28,6 +30,7 @@ class SearchResult(BaseModel):
 
 class PrimerRequest(BaseModel):
     topic: str
+    selected_papers: Optional[list[Paper]] = None
 
 
 class PapersResponse(BaseModel):

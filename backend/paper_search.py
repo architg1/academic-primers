@@ -86,13 +86,15 @@ def _parse_ss_paper(data: dict) -> Optional[Paper]:
 async def search_semantic_scholar(
     query: str,
     client: httpx.AsyncClient,
-    limit: int = 20,
+    limit: int = 50,
     max_retries: int = 3,
 ) -> list[Paper]:
     params = {
         "query": query,
         "fields": SS_FIELDS,
         "limit": limit,
+        "sort": "citationCount",
+        "minCitationCount": 2,
     }
     for attempt in range(max_retries):
         try:
@@ -208,7 +210,7 @@ def _parse_pubmed_xml(xml_text: str) -> list[Paper]:
 async def search_pubmed(
     query: str,
     client: httpx.AsyncClient,
-    limit: int = 10,
+    limit: int = 25,
 ) -> list[Paper]:
     base = _ncbi_base_params()
 

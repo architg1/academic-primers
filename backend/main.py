@@ -8,6 +8,8 @@ Endpoints:
   GET  /             — serves frontend/index.html
 """
 
+from __future__ import annotations
+
 import json
 import os
 
@@ -45,37 +47,42 @@ def _sse(event_type: str, data: dict) -> str:
     return f"data: {payload}\n\n"
 
 
-async def _run_pipeline(topic: str):
-    yield _sse("status", {"message": "Expanding your topic into search queries…"})
-    try:
-        search_result = await expand_query(topic)
-    except Exception as exc:
-        yield _sse("error", {"message": f"Query expansion failed: {exc}"})
-        return
+async def _run_pipeline(topic: str, selected_papers: list | None = None):
+    if selected_papers:
+        # User already curated the paper list — skip search entirely
+        top_papers = selected_papers
+        yield _sse("status", {"message": f"Using {len(top_papers)} selected papers…"})
+    else:
+        yield _sse("status", {"message": "Expanding your topic into search queries…"})
+        try:
+            search_result = await expand_query(topic)
+        except Exception as exc:
+            yield _sse("error", {"message": f"Query expansion failed: {exc}"})
+            return
 
-    yield _sse("queries", {
-        "queries": search_result.queries,
-        "field": search_result.field,
-        "keywords": search_result.keywords,
-    })
+        yield _sse("queries", {
+            "queries": search_result.queries,
+            "field": search_result.field,
+            "keywords": search_result.keywords,
+        })
 
-    yield _sse("status", {"message": f"Searching papers across {len(search_result.queries)} queries…"})
-    try:
-        raw_papers = await search_all(search_result.queries, field=search_result.field)
-    except Exception as exc:
-        yield _sse("error", {"message": f"Paper search failed: {exc}"})
-        return
+        yield _sse("status", {"message": f"Searching papers across {len(search_result.queries)} queries…"})
+        try:
+            raw_papers = await search_all(search_result.queries, field=search_result.field)
+        except Exception as exc:
+            yield _sse("error", {"message": f"Paper search failed: {exc}"})
+            return
 
-    if not raw_papers:
-        yield _sse("error", {"message": "No papers found. Try a more specific topic."})
-        return
+        if not raw_papers:
+            yield _sse("error", {"message": "No papers found. Try a more specific topic."})
+            return
 
-    yield _sse("status", {"message": f"Ranking {len(raw_papers)} papers by quality…"})
-    top_papers = filter_and_rank(raw_papers, top_n=10)
+        yield _sse("status", {"message": f"Ranking {len(raw_papers)} papers by quality…"})
+        top_papers = filter_and_rank(raw_papers, top_n=10)
 
-    if not top_papers:
-        yield _sse("error", {"message": "Found papers but none had usable abstracts. Try a different topic."})
-        return
+        if not top_papers:
+            yield _sse("error", {"message": "Found papers but none had usable abstracts. Try a different topic."})
+            return
 
     # Fetch full text for open-access papers
     oa_count = sum(1 for p in top_papers if p.is_open_access and p.pdf_url)
@@ -149,7 +156,7 @@ async def generate(req: PrimerRequest):
         raise HTTPException(status_code=400, detail="Topic cannot be empty.")
 
     return StreamingResponse(
-        _run_pipeline(req.topic),
+        _run_pipeline(req.topic, req.selected_papers),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
