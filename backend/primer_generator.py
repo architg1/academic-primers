@@ -67,6 +67,7 @@ You are a scientific writer producing academic primers for PhD-level researchers
 Your primers are rigorous, precise, and assume graduate-level mathematical and scientific literacy. \
 Do not over-explain basics. Use field-standard notation and terminology. \
 Cite papers using bracketed numbers like [1], [2], [3] inline throughout the text. \
+Every paper provided to you must be cited at least once — do not omit any reference. \
 Be concise — every sentence should add information.\
 """
 
@@ -76,7 +77,7 @@ Target length: 2000-2500 words total across all sections.
 
 **Topic:** {topic}
 
-**Available papers (cite inline using [n] notation):**
+**Available papers — you MUST cite every one of them at least once:**
 
 {context}
 
