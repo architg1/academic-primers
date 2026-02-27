@@ -570,6 +570,149 @@ textarea::placeholder { color: var(--text-secondary); }
 }
 
 /* ─────────────────────────────────────────────────────────────────
+   Paper lookup
+───────────────────────────────────────────────────────────────── */
+.paper-lookup {
+  margin-top: 0.875rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 0.875rem 1rem;
+  background: var(--surface);
+}
+
+.paper-lookup-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.paper-lookup-row input {
+  flex: 1;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 0.875rem;
+  color: var(--text);
+  background: var(--bg);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.paper-lookup-row input:focus {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-ring);
+  background: var(--surface);
+}
+
+.paper-lookup-row input::placeholder { color: var(--text-secondary); }
+
+#paper-lookup-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1rem;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+#paper-lookup-btn:hover:not(:disabled) { background: var(--accent-hover); }
+#paper-lookup-btn:disabled { opacity: 0.65; cursor: not-allowed; }
+
+.paper-lookup-results {
+  margin-top: 0.625rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.lookup-result {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.lookup-result-body { flex: 1; min-width: 0; }
+
+.lookup-result-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lookup-result-meta {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-top: 0.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lookup-add-btn {
+  flex-shrink: 0;
+  padding: 0.35rem 0.8rem;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.lookup-add-btn:hover:not(:disabled) { background: var(--accent-hover); }
+
+.lookup-add-btn--added {
+  background: var(--green);
+  cursor: default;
+  opacity: 0.8;
+}
+
+.lookup-empty {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  padding: 0.5rem 0.25rem;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   Skeleton loading
+───────────────────────────────────────────────────────────────── */
+.skel {
+  display: block;
+  background: linear-gradient(90deg, var(--border) 25%, #edf0f2 50%, var(--border) 75%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 4px;
+}
+
+.skel-line   { height: 12px; }
+.skel-box    { width: 16px; height: 16px; border-radius: 3px; }
+.skel-circle { width: 26px; height: 26px; border-radius: 50%; }
+
+@keyframes shimmer {
+  0%   { background-position:  100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* ─────────────────────────────────────────────────────────────────
    Utility & responsive
 ───────────────────────────────────────────────────────────────── */
 .hidden { display: none !important; }

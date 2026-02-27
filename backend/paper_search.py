@@ -7,6 +7,7 @@ PubMed: secondary source — authoritative for biomedical, peer-reviewed only.
 
 import asyncio
 import os
+import re
 import xml.etree.ElementTree as ET
 from typing import Optional
 
@@ -19,6 +20,9 @@ from backend.models import Paper
 # ---------------------------------------------------------------------------
 
 SS_SEARCH_URL = "https://api.semanticscholar.org/graph/v1/paper/search"
+SS_PAPER_URL  = "https://api.semanticscholar.org/graph/v1/paper"
+
+_DOI_RE = re.compile(r"^10\.\d{4,}/.+$")
 SS_FIELDS = ",".join([
     "title", "authors", "year", "abstract",
     "citationCount", "influentialCitationCount",
@@ -64,11 +68,10 @@ def _ncbi_base_params() -> dict:
 # Semantic Scholar
 # ---------------------------------------------------------------------------
 
-def _parse_ss_paper(data: dict) -> Optional[Paper]:
+def _ss_data_to_paper(data: dict) -> Optional[Paper]:
+    """Parse a Semantic Scholar record into a Paper object with no filtering."""
     title = data.get("title") or ""
     if not title:
-        return None
-    if _is_preprint(data):
         return None
 
     authors = [a["name"] for a in data.get("authors", []) if a.get("name")]
@@ -96,6 +99,13 @@ def _parse_ss_paper(data: dict) -> Optional[Paper]:
         url=url,
         source="semantic_scholar",
     )
+
+
+def _parse_ss_paper(data: dict) -> Optional[Paper]:
+    """Parse a Semantic Scholar record, returning None for preprints."""
+    if _is_preprint(data):
+        return None
+    return _ss_data_to_paper(data)
 
 
 async def search_semantic_scholar(
@@ -251,6 +261,42 @@ async def search_pubmed(
         return []
 
     return _parse_pubmed_xml(xml_text)
+
+
+# ---------------------------------------------------------------------------
+# Paper lookup (user-specified papers — no preprint filter, relevance sort)
+# ---------------------------------------------------------------------------
+
+async def _doi_lookup(doi: str, client: httpx.AsyncClient) -> list[Paper]:
+    url = f"{SS_PAPER_URL}/DOI:{doi}"
+    try:
+        resp = await client.get(url, params={"fields": SS_FIELDS}, headers=_ss_headers(), timeout=TIMEOUT)
+        resp.raise_for_status()
+        paper = _ss_data_to_paper(resp.json())
+        return [paper] if paper else []
+    except Exception as exc:
+        print(f"[lookup] DOI={doi!r} error: {exc}")
+        return []
+
+
+async def _title_lookup(query: str, client: httpx.AsyncClient) -> list[Paper]:
+    params = {"query": query, "fields": SS_FIELDS, "limit": 5}
+    try:
+        resp = await client.get(SS_SEARCH_URL, params=params, headers=_ss_headers(), timeout=TIMEOUT)
+        resp.raise_for_status()
+        return [p for item in resp.json().get("data", []) if (p := _ss_data_to_paper(item))]
+    except Exception as exc:
+        print(f"[lookup] query={query!r} error: {exc}")
+        return []
+
+
+async def lookup_papers(query: str) -> list[Paper]:
+    """Fetch specific papers by title/keyword or DOI. No preprint filter applied."""
+    query = query.strip()
+    async with httpx.AsyncClient() as client:
+        if _DOI_RE.match(query):
+            return await _doi_lookup(query, client)
+        return await _title_lookup(query, client)
 
 
 # ---------------------------------------------------------------------------

@@ -38,3 +38,7 @@ class PapersResponse(BaseModel):
     queries: list[str]
     field: str
     papers: list[Paper]
+
+
+class PaperLookupRequest(BaseModel):
+    query: str

@@ -19,8 +19,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from backend.models import PapersResponse, PrimerRequest
-from backend.paper_search import search_all
+from backend.models import PaperLookupRequest, PapersResponse, PrimerRequest
+from backend.paper_search import lookup_papers, search_all
 from backend.pdf_fetcher import enrich_papers_with_pdfs
 from backend.primer_generator import stream_primer
 from backend.quality_filter import extract_quoted_phrases, filter_and_rank
@@ -150,6 +150,14 @@ async def get_papers(req: PrimerRequest):
         field=search_result.field,
         papers=top_papers,
     )
+
+
+@app.post("/api/paper/lookup")
+async def paper_lookup(req: PaperLookupRequest):
+    if not req.query.strip():
+        raise HTTPException(status_code=400, detail="Query cannot be empty.")
+    papers = await lookup_papers(req.query)
+    return {"papers": papers}
 
 
 @app.post("/api/generate")

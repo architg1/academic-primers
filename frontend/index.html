@@ -72,6 +72,25 @@
       </div>
       <div id="papers-grid"></div>
 
+      <!-- Paper lookup -->
+      <div id="paper-lookup" class="paper-lookup hidden">
+        <form id="paper-lookup-form" autocomplete="off">
+          <div class="paper-lookup-row">
+            <input
+              id="paper-lookup-input"
+              type="text"
+              placeholder="Add a paper by title, keywords, or DOI…"
+              maxlength="300"
+            />
+            <button type="submit" id="paper-lookup-btn">
+              Search
+              <span class="spinner hidden" id="paper-lookup-spinner"></span>
+            </button>
+          </div>
+        </form>
+        <div id="paper-lookup-results" class="paper-lookup-results hidden"></div>
+      </div>
+
       <!-- Confirm step -->
       <div id="generate-confirm" class="generate-confirm hidden">
         <span id="selected-count" class="selected-count"></span>

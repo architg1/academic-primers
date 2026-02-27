@@ -13,6 +13,7 @@ let currentTopic   = '';
 let primerBuffer   = '';
 let isSearching    = false;
 let isGenerating   = false;
+let lookupPaperMap = {};   // idx → Paper for lookup results
 
 // ── Elements ─────────────────────────────────────────────────────
 const form             = $('primer-form');
@@ -37,8 +38,14 @@ const generateSpinner  = $('generate-spinner');
 const primerSection    = $('primer-section');
 const primerContent    = $('primer-content');
 const copyBtn          = $('copy-btn');
-const errorBox         = $('error-box');
-const errorText        = $('error-text');
+const errorBox            = $('error-box');
+const errorText           = $('error-text');
+const paperLookup         = $('paper-lookup');
+const paperLookupForm     = $('paper-lookup-form');
+const paperLookupInput    = $('paper-lookup-input');
+const paperLookupBtn      = $('paper-lookup-btn');
+const paperLookupSpinner  = $('paper-lookup-spinner');
+const paperLookupResults  = $('paper-lookup-results');
 
 // ── Marked config ────────────────────────────────────────────────
 marked.setOptions({ breaks: true });
@@ -82,8 +89,9 @@ copyBtn.addEventListener('click', () => {
 
 // ── Reset ────────────────────────────────────────────────────────
 function reset() {
-  currentPapers = [];
-  primerBuffer  = '';
+  currentPapers  = [];
+  primerBuffer   = '';
+  lookupPaperMap = {};
   hide(statusSection);
   hide(queriesSection);
   hide(papersSection);
@@ -91,13 +99,17 @@ function reset() {
   hide(errorBox);
   hide(copyBtn);
   hide(generateConfirm);
-  queriesList.innerHTML   = '';
-  papersGrid.innerHTML    = '';
-  primerContent.innerHTML = '';
+  hide(paperLookup);
+  queriesList.innerHTML        = '';
+  papersGrid.innerHTML         = '';
+  primerContent.innerHTML      = '';
+  paperLookupInput.value       = '';
+  paperLookupResults.innerHTML = '';
+  hide(paperLookupResults);
   primerContent.classList.remove('streaming');
-  fieldBadge.textContent   = '';
-  keywordsText.textContent = '';
-  paperCount.textContent   = '';
+  fieldBadge.textContent    = '';
+  keywordsText.textContent  = '';
+  paperCount.textContent    = '';
   selectedCount.textContent = '';
 }
 
@@ -134,6 +146,23 @@ function onCheckboxChange(e) {
   const card = document.querySelector(`.paper-card[data-index="${idx}"]`);
   if (card) card.classList.toggle('excluded', !e.target.checked);
   updateSelectedCount();
+}
+
+// ── Skeleton cards ───────────────────────────────────────────────
+function renderSkeletonCards(n) {
+  const card = `
+    <div class="paper-card skeleton-card" aria-hidden="true">
+      <div class="paper-check"><div class="skel skel-box"></div></div>
+      <div class="paper-rank"><div class="skel skel-circle"></div></div>
+      <div class="paper-body">
+        <div class="skel skel-line" style="width:68%"></div>
+        <div class="skel skel-line" style="width:42%;margin-top:6px"></div>
+        <div class="skel skel-line" style="width:100%;margin-top:10px"></div>
+        <div class="skel skel-line" style="width:85%;margin-top:5px"></div>
+        <div class="skel skel-line" style="width:55%;margin-top:5px"></div>
+      </div>
+    </div>`;
+  return Array(n).fill(card).join('');
 }
 
 // ── Paper card renderer ──────────────────────────────────────────
@@ -201,6 +230,11 @@ async function findPapers(topic) {
   show(statusSection);
   statusText.textContent = 'Searching for papers…';
 
+  // Show skeleton cards immediately so the page feels responsive
+  papersGrid.innerHTML = renderSkeletonCards(6);
+  show(papersSection);
+  papersSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
   try {
     const resp = await fetch('/api/papers', {
       method: 'POST',
@@ -236,6 +270,7 @@ async function findPapers(topic) {
 
     updateSelectedCount();
     show(papersSection);
+    show(paperLookup);
     show(generateConfirm);
     hide(statusSection);
 
@@ -250,6 +285,86 @@ async function findPapers(topic) {
     setSearchLoading(false);
   }
 }
+
+// ── Paper lookup ─────────────────────────────────────────────────
+function isAlreadyAdded(paper) {
+  return currentPapers.some(p =>
+    (paper.semantic_scholar_id && p.semantic_scholar_id === paper.semantic_scholar_id) ||
+    (paper.doi && p.doi === paper.doi)
+  );
+}
+
+function renderLookupResult(paper, idx) {
+  const authors = paper.authors.length
+    ? escapeHtml(paper.authors.slice(0, 3).join(', ') + (paper.authors.length > 3 ? ' et al.' : ''))
+    : 'Unknown authors';
+  const year  = paper.year || 'n.d.';
+  const venue = paper.venue ? ` · ${escapeHtml(paper.venue)}` : '';
+  const added = isAlreadyAdded(paper);
+  return `
+    <div class="lookup-result">
+      <div class="lookup-result-body">
+        <div class="lookup-result-title">${escapeHtml(paper.title)}</div>
+        <div class="lookup-result-meta">${authors} · ${year}${venue}</div>
+      </div>
+      <button class="lookup-add-btn${added ? ' lookup-add-btn--added' : ''}"
+        data-lookup-idx="${idx}" ${added ? 'disabled' : ''}>
+        ${added ? 'Added ✓' : 'Add'}
+      </button>
+    </div>`;
+}
+
+function addLookupPaper(paper, btn) {
+  if (isAlreadyAdded(paper)) return;
+  const index = currentPapers.length;
+  currentPapers.push(paper);
+  papersGrid.insertAdjacentHTML('beforeend', renderPaperCard(paper, index));
+  const newCheckbox = papersGrid.querySelector(`.paper-checkbox[data-index="${index}"]`);
+  if (newCheckbox) newCheckbox.addEventListener('change', onCheckboxChange);
+  paperCount.textContent = `(${currentPapers.length})`;
+  updateSelectedCount();
+  btn.textContent = 'Added ✓';
+  btn.classList.add('lookup-add-btn--added');
+  btn.disabled = true;
+}
+
+paperLookupForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  const query = paperLookupInput.value.trim();
+  if (!query || isSearching || isGenerating) return;
+
+  paperLookupBtn.disabled = true;
+  show(paperLookupSpinner);
+  hide(paperLookupResults);
+  lookupPaperMap = {};
+
+  try {
+    const resp = await fetch('/api/paper/lookup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+    });
+    if (!resp.ok) throw new Error(`Server error (${resp.status})`);
+    const data = await resp.json();
+
+    if (!data.papers.length) {
+      paperLookupResults.innerHTML = '<p class="lookup-empty">No papers found. Try a different title or DOI.</p>';
+    } else {
+      data.papers.forEach((p, i) => { lookupPaperMap[i] = p; });
+      paperLookupResults.innerHTML = data.papers.map((p, i) => renderLookupResult(p, i)).join('');
+      paperLookupResults.querySelectorAll('.lookup-add-btn:not([disabled])').forEach(btn => {
+        btn.addEventListener('click', () => addLookupPaper(lookupPaperMap[+btn.dataset.lookupIdx], btn));
+      });
+    }
+    show(paperLookupResults);
+  } catch (err) {
+    paperLookupResults.innerHTML = `<p class="lookup-empty">${escapeHtml(err.message)}</p>`;
+    show(paperLookupResults);
+  } finally {
+    paperLookupBtn.disabled = false;
+    hide(paperLookupSpinner);
+  }
+});
 
 // ── Stage 2: Generate primer ─────────────────────────────────────
 generateBtn.addEventListener('click', async () => {
