@@ -46,13 +46,13 @@ def _build_further_reading(failed_papers: list[Paper]) -> str:
     if not failed_papers:
         return ""
     lines = []
-    for p in failed_papers:
+    for i, p in enumerate(failed_papers, 1):
         authors = ", ".join(p.authors[:3])
         if len(p.authors) > 3:
             authors += " et al."
         year = p.year or "n.d."
         url_part = f" {p.url}" if p.url else ""
-        lines.append(f"- {p.title} ({authors}, {year}){url_part}")
+        lines.append(f"{i}. {p.title} ({authors}, {year}){url_part}")
     return (
         "\n\n**The following papers were identified as relevant but their PDFs "
         "could not be retrieved. Mention them in a '## Further Reading' section "
@@ -101,9 +101,11 @@ Approximately 500 words. Interpret the results in aggregate. What do they collec
 Where do findings converge or conflict? What are the open questions and active debates? \
 What should a new researcher in this area focus on first?
 {further_reading}
----
+## References
+List every paper you cited inline, in order of their citation number. Use this format exactly:
+[n] Title (Authors, Year) URL
 
-Cite papers throughout all sections. Do not add any sections beyond the four above.\
+Include the URL if one is available in the paper metadata provided above. Do not add any sections beyond these.\
 """
 
 

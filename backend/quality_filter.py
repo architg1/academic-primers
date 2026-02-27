@@ -16,11 +16,14 @@ Deduplication:
 
 import math
 import re
+from typing import Optional
 
 from backend.models import Paper
 
-_PREPRINT_VENUES = {"arxiv", "biorxiv", "medrxiv", "ssrn", "chemrxiv", "techrxiv"}
 
+def extract_quoted_phrases(topic: str) -> list[str]:
+    """Return all double-quoted phrases from a topic string, e.g. '"attention mechanism"' → ['attention mechanism']."""
+    return re.findall(r'"([^"]+)"', topic)
 
 def _normalize_title(title: str) -> str:
     return re.sub(r"\W+", "", title.lower())
@@ -48,13 +51,9 @@ def score_paper(paper: Paper) -> float:
         elif paper.year >= 2010:
             score += 3
 
-    # Venue quality — peer-reviewed venues get a bonus; preprint servers get a penalty
+    # Venue quality — peer-reviewed venue bonus (preprints are excluded upstream)
     if paper.venue:
-        venue_lower = paper.venue.lower()
-        if any(p in venue_lower for p in _PREPRINT_VENUES):
-            score -= 3
-        else:
-            score += 5
+        score += 5
 
     # Open access — we can attach the PDF to the primer context
     if paper.is_open_access:
@@ -94,12 +93,25 @@ def deduplicate(papers: list[Paper]) -> list[Paper]:
     return unique
 
 
-def filter_and_rank(papers: list[Paper], top_n: int = 10) -> list[Paper]:
+def filter_and_rank(
+    papers: list[Paper],
+    top_n: int = 10,
+    required_phrases: Optional[list[str]] = None,
+) -> list[Paper]:
     """
-    Remove papers without abstracts, deduplicate, score, and return the top N.
+    Remove papers without abstracts, enforce required phrases, deduplicate, score, and return the top N.
+
+    required_phrases: phrases that must appear (case-insensitive) in the title or abstract of every returned paper.
     """
     # Hard requirement: must have a meaningful abstract for primer generation
     with_abstracts = [p for p in papers if p.abstract and len(p.abstract) > 50]
+
+    # Enforce quoted phrases from the original topic — each phrase must appear in title or abstract
+    if required_phrases:
+        def matches(paper: Paper) -> bool:
+            haystack = f"{paper.title} {paper.abstract or ''}".lower()
+            return all(phrase.lower() in haystack for phrase in required_phrases)
+        with_abstracts = [p for p in with_abstracts if matches(p)]
 
     unique = deduplicate(with_abstracts)
 

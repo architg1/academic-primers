@@ -23,7 +23,7 @@ from backend.models import PapersResponse, PrimerRequest
 from backend.paper_search import search_all
 from backend.pdf_fetcher import enrich_papers_with_pdfs
 from backend.primer_generator import stream_primer
-from backend.quality_filter import filter_and_rank
+from backend.quality_filter import extract_quoted_phrases, filter_and_rank
 from backend.query_expander import expand_query
 
 load_dotenv()
@@ -78,7 +78,8 @@ async def _run_pipeline(topic: str, selected_papers: list | None = None):
             return
 
         yield _sse("status", {"message": f"Ranking {len(raw_papers)} papers by quality…"})
-        top_papers = filter_and_rank(raw_papers, top_n=10)
+        required = extract_quoted_phrases(topic)
+        top_papers = filter_and_rank(raw_papers, top_n=10, required_phrases=required or None)
 
         if not top_papers:
             yield _sse("error", {"message": "Found papers but none had usable abstracts. Try a different topic."})
@@ -140,7 +141,8 @@ async def get_papers(req: PrimerRequest):
     if not raw_papers:
         raise HTTPException(status_code=404, detail="No papers found for this topic.")
 
-    top_papers = filter_and_rank(raw_papers, top_n=10)
+    required = extract_quoted_phrases(req.topic)
+    top_papers = filter_and_rank(raw_papers, top_n=10, required_phrases=required or None)
 
     return PapersResponse(
         topic=req.topic,

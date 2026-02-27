@@ -30,6 +30,19 @@ PUBMED_EFETCH = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
 
 TIMEOUT = httpx.Timeout(20.0)
 
+# Preprint servers to exclude — checked against Semantic Scholar's externalIds keys and venue strings
+_PREPRINT_EXTERNAL_ID_KEYS = {"ArXiv", "bioRxiv", "medRxiv", "chemRxiv"}
+_PREPRINT_VENUE_SUBSTRINGS = {"arxiv", "biorxiv", "medrxiv", "ssrn", "chemrxiv", "techrxiv", "preprint"}
+
+
+def _is_preprint(data: dict) -> bool:
+    """Return True if the Semantic Scholar record is a preprint rather than a published paper."""
+    external_ids = data.get("externalIds") or {}
+    if any(k in external_ids for k in _PREPRINT_EXTERNAL_ID_KEYS):
+        return True
+    venue = (data.get("venue") or "").lower()
+    return any(p in venue for p in _PREPRINT_VENUE_SUBSTRINGS)
+
 
 def _ss_headers() -> dict:
     headers = {"Accept": "application/json"}
@@ -54,6 +67,8 @@ def _ncbi_base_params() -> dict:
 def _parse_ss_paper(data: dict) -> Optional[Paper]:
     title = data.get("title") or ""
     if not title:
+        return None
+    if _is_preprint(data):
         return None
 
     authors = [a["name"] for a in data.get("authors", []) if a.get("name")]
